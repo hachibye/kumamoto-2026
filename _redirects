@@ -1,0 +1,6 @@
+/robots.txt /dist/robots.txt 200
+/style.css /dist/style.css 200
+/app.js /dist/app.js 200
+/vendor/* /dist/vendor/:splat 200
+/assets/* /dist/assets/:splat 200
+/* /dist/index.html 200
