@@ -9,6 +9,8 @@
 - 六日行程時間軸，時間、地點、費用、營業時間與備註分開顯示
 - 景點與餐廳備選保留 Google Maps、Tabelog 與官方網站連結
 - Leaflet／OpenStreetMap 當日路線圖，可切換景點或餐廳候選
+- 133 間餐廳比較：雙門檻最高級別、Tabelog ≥ 3.5、放寬選擇三個級別
+- 待選收藏、10 個公開範例餐次替換、導航更新與逐餐還原，選擇保存在目前瀏覽器
 - 公休與時間不符項目反灰並另行收合
 - RWD 與省流量設計；地圖按需載入，桌機才載入輕量動態效果
 - `robots.txt` 與頁面 meta 設為不索引；這只能降低曝光，不能取代存取控制
@@ -71,3 +73,13 @@ python3 -m http.server 4173 --directory dist
 公開網址代表任何取得連結的人都可能複製內容。`robots.txt`、`noindex` 與 `noarchive` 只是對搜尋引擎的請求；若資料不能公開，應使用存取驗證或保持 repository 為 private。
 
 GitHub 圖示來自 [Simple Icons](https://simpleicons.org/)（CC0）。
+
+## 餐廳比較與行程替換
+
+`dist/restaurants.js` 僅保存餐廳公開資訊：店名、區域、類型、預算、Tabelog／Google 分數、店址與公開來源及查閱日期。不包含個人行程適配備註、收藏、用餐決定、預約、訂單或查證工作檔。
+
+三個級別分別為 Tabelog ≥ 3.5 且 Google ≥ 4.5（22 間）、Tabelog ≥ 3.5（78 間）、Tabelog ≥ 3.0 且 Google ≥ 4.0（129 間），彼此可重疊。分數查閱日期列於各卡片，未知 Google 分數不計入雙平台門檻。
+
+公開範例沿用 11/15–11/20 的行程。餐次與地圖綁定以本範例資料為準；旅館含餐不提供替換。套用後保留原時段，不會自動重排交通或完成預約；位置不明時不沿用舊座標，改以店名與地址導航。公開版使用獨立的 localStorage 鍵，收藏與餐次變更只保存在目前瀏覽器，可逐餐還原。
+
+新增候選請保留穩定的 `id`，使用 `null` 表示未知 Google 分數。若更換行程，請同步調整 `mealDefinitions` 的餐次名稱與地圖索引。根目錄與 `dist/index.html` 必須保持同步，並保留 `_redirects` 的 `/restaurants.js` 規則。

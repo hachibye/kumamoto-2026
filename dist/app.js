@@ -130,17 +130,18 @@ routeMaps.forEach((route,day)=>route.choices?.forEach((choice,index)=>{
   if(day===4&&index===0){if(selected===10)selected=8;else if(selected===8||selected===9)selected=choice.default||0}
   choice.selected=choice.options[selected]&&!choice.options[selected][3]?selected:(choice.default||0);route.points[choice.point]=choice.options[choice.selected].slice(0,3);
 }));
-const encodePoint=p=>`${p[1]},${p[2]}`;
+const hasCoordinates=p=>Number.isFinite(p[1])&&Number.isFinite(p[2]);
+const encodePoint=p=>hasCoordinates(p)?`${p[1]},${p[2]}`:p[0];
 const pointNavUrl=p=>`https://www.google.com/maps/dir/?api=1&destination=${encodePoint(p)}`;
-const googleRouteUrl=(points,mode='driving')=>{const waypoints=points.slice(1,-1).map(encodePoint).join('|');return `https://www.google.com/maps/dir/?api=1&origin=${encodePoint(points[0])}&destination=${encodePoint(points.at(-1))}${waypoints?`&waypoints=${encodeURIComponent(waypoints)}`:''}&travelmode=${mode}`};
+const googleRouteUrl=(points,mode='driving')=>{const waypoints=points.slice(1,-1).map(encodePoint).join('|');return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(encodePoint(points[0]))}&destination=${encodeURIComponent(encodePoint(points.at(-1)))}${waypoints?`&waypoints=${encodeURIComponent(waypoints)}`:''}&travelmode=${mode}`};
 const normalizeRoutePoints=points=>points.filter((point,index)=>!index||encodePoint(point)!==encodePoint(points[index-1]));
 const renderGoogleRoutes=r=>{
   const groups=r.googleRoutes||[{indexes:r.google,mode:r.googleMode||'driving',label:'路線'}];
   return groups.map(group=>{const points=normalizeRoutePoints(group.indexes.map(i=>r.points[i]));const trip=`${points[0][0]} → ${points.at(-1)[0]}`;return `<a href="${googleRouteUrl(points,group.mode)}" target="_blank" rel="noreferrer" title="${trip}" aria-label="Google ${group.label}：${trip}">Google ${group.label}</a>`}).join('');
 };
 const straightDistance=(a,b)=>{const rad=n=>n*Math.PI/180;const dLat=rad(b[1]-a[1]);const dLng=rad(b[2]-a[2]);const h=Math.sin(dLat/2)**2+Math.cos(rad(a[1]))*Math.cos(rad(b[1]))*Math.sin(dLng/2)**2;return 6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))};
-const distanceLabel=(r,choice)=>{if(choice.from===undefined)return'';const restaurant=r.points[choice.point];const from=r.points[choice.from];const to=r.points[choice.to];const format=n=>n<1?`${Math.round(n*1000)} m`:`${n.toFixed(1)} km`;const first=`距 ${from[0]} 約 ${format(straightDistance(from,restaurant))}`;return choice.to===choice.from?`${first}（直線）`:`${first} · 距 ${to[0]} 約 ${format(straightDistance(restaurant,to))}（直線）`};
-const renderChoices=(r,day)=>!r.choices?'':`<div class="route-choices">${r.choices.map((choice,index)=>`<label><span>${choice.label}</span><select data-choice-index="${index}" aria-label="${choice.label}">${choice.options.map((option,optionIndex)=>option[3]?'':`<option value="${optionIndex}" ${optionIndex===choice.selected?'selected':''}>${option[0]}</option>`).join('')}</select>${choice.from===undefined?'':`<em class="choice-distance" data-choice-distance="${index}">${distanceLabel(r,choice)}</em>`}</label>`).join('')}</div>`;
+const distanceLabel=(r,choice)=>{if(choice.from===undefined)return'';const restaurant=r.points[choice.point];const from=r.points[choice.from];const to=r.points[choice.to];if(![restaurant,from,to].every(hasCoordinates))return '位置待確認；請用 Google Maps 查看移動時間';const format=n=>n<1?`${Math.round(n*1000)} m`:`${n.toFixed(1)} km`;const first=`距 ${from[0]} 約 ${format(straightDistance(from,restaurant))}`;return choice.to===choice.from?`${first}（直線）`:`${first} · 距 ${to[0]} 約 ${format(straightDistance(restaurant,to))}（直線）`};
+const renderChoices=(r,day)=>!r.choices?'':`<div class="route-choices">${r.choices.map((choice,index)=>`<label><span>${choice.label}</span><select data-choice-index="${index}" aria-label="${choice.label}">${choice.customLabel?`<option value="custom" selected>${escapeRestaurant(choice.customLabel)}（已套用）</option>`:''}${choice.options.map((option,optionIndex)=>option[3]?'':`<option value="${optionIndex}" ${!choice.customLabel&&optionIndex===choice.selected?'selected':''}>${option[0]}</option>`).join('')}</select>${choice.from===undefined?'':`<em class="choice-distance" data-choice-distance="${index}">${distanceLabel(r,choice)}</em>`}</label>`).join('')}</div>`;
 const renderRoutePanel=(r,i)=>`<section class="route-overview ${r.tone==='warn'?'route-warn':''}"><button class="route-toggle" type="button" aria-expanded="false" aria-controls="route-panel-${i}"><span class="route-copy"><b>當日路線圖</b><small>${r.assessment}</small></span><span class="route-action"><em>展開地圖</em><i aria-hidden="true">＋</i></span></button><div class="route-panel" id="route-panel-${i}" hidden>${renderChoices(r,i)}<div class="route-map-state" role="status">點擊後才載入地圖，節省手機流量與電量。</div><div class="route-map" aria-label="${days[i].date} 當日行程路線圖"></div><div class="route-map-footer"><span>點圖釘可用 Google Maps 導航</span><div class="route-google-links">${renderGoogleRoutes(r)}</div></div></div></section>`;
 document.querySelector('#day-nav').innerHTML=days.map((d,i)=>`<a class="day-link" href="#day-${i+1}">${d.date} ${d.wd}</a>`).join('');
 document.querySelector('#days').innerHTML=days.map((d,i)=>`<details class="day-card" id="day-${i+1}" ${i?'':'open'}><summary><div class="day-index">${String(i+1).padStart(2,'0')}</div><div class="day-heading"><span>${d.date}（${d.wd}） · ${d.tag}</span><h3>${d.title}</h3><p>${d.route}</p></div><span class="toggle" aria-hidden="true"></span></summary><div class="day-body"><div class="day-note ${d.danger?'danger':''}"><b>NOTE</b><span>${d.note}</span></div>${renderRoutePanel(routeMaps[i],i)}<ol class="timeline">${d.stops.map(renderStop).join('')}</ol>${renderBackups(d.backups)}${renderAlt(d.alts)}</div></details>`).join('');
@@ -190,13 +191,16 @@ const routeGeometry=async(r,segment)=>{
 };
 const initRouteMap=async(section,index)=>{
   const panel=section.querySelector('.route-panel');const state=section.querySelector('.route-map-state');const target=section.querySelector('.route-map');const r=routeMaps[index];
+  const generation=(target._mapGeneration||0)+1;target._mapGeneration=generation;
   state.textContent='正在載入路線圖…';
   try{
-    const L=await loadLeaflet();
+    const L=await loadLeaflet();if(target._mapGeneration!==generation)return;
     const view=L.map(target,{scrollWheelZoom:false,zoomControl:true,attributionControl:true});
+    target._leafletMap=view;
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(view);
     const bounds=L.latLngBounds([]);
     r.points.forEach((p,n)=>{
+      if(!hasCoordinates(p))return;
       const marker=L.marker([p[1],p[2]],{icon:L.divIcon({className:'route-marker',html:`<span>${n+1}</span>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(view);
       marker.bindTooltip(`${n+1}. ${p[0]}`,{direction:'top',offset:[0,-12]});
       marker.bindPopup(`<div class="route-popup"><b>${n+1}. ${p[0]}</b><a href="${pointNavUrl(p)}" target="_blank" rel="noreferrer">用 Google Maps 導航</a></div>`);
@@ -205,14 +209,15 @@ const initRouteMap=async(section,index)=>{
     view.fitBounds(bounds.pad(.12),{maxZoom:14});
     let fallback=false;
     for(const segment of r.segments){
+      if(segment.indexes.some(i=>!hasCoordinates(r.points[i])))continue;
       const points=segment.indexes.map(i=>[r.points[i][1],r.points[i][2]]);const color=segment.branch?'#e9653f':'#176c68';
       if(segment.mode==='road'){
-        try{L.geoJSON(await routeGeometry(r,segment),{style:{color,weight:5,opacity:.86,lineCap:'round',lineJoin:'round'}}).bindTooltip(segment.label).addTo(view)}
-        catch{fallback=true;L.polyline(points,{color,weight:4,opacity:.82,dashArray:'7 8'}).bindTooltip(segment.label).addTo(view)}
+        try{const geometry=await routeGeometry(r,segment);if(target._mapGeneration!==generation)return;L.geoJSON(geometry,{style:{color,weight:5,opacity:.86,lineCap:'round',lineJoin:'round'}}).bindTooltip(segment.label).addTo(view)}
+        catch{if(target._mapGeneration!==generation)return;fallback=true;L.polyline(points,{color,weight:4,opacity:.82,dashArray:'7 8'}).bindTooltip(segment.label).addTo(view)}
       }else L.polyline(points,{color,weight:4,opacity:.76,dashArray:segment.dash?'7 8':null}).bindTooltip(segment.label).addTo(view);
     }
-    target._leafletMap=view;state.textContent=fallback?'部分道路服務暫時無回應，改以站點連線顯示。':'實線為道路主線，虛線為步行、鐵路或示意連線。';
-  }catch(error){console.error('Route map failed',error);state.textContent='地圖暫時載入失敗，仍可使用下方 Google 路線。';target.classList.add('route-map-error')}
+    target._leafletMap=view;state.textContent=r.points.some(p=>!hasCoordinates(p))?'已更新餐廳；部分位置待確認，相關圖釘與連線暫不顯示，請用下方 Google 路線導航。':fallback?'部分道路服務暫時無回應，改以站點連線顯示。':'實線為道路主線，虛線為步行、鐵路或示意連線。';
+  }catch(error){if(target._mapGeneration!==generation)return;console.error('Route map failed',error);state.textContent='地圖暫時載入失敗，仍可使用下方 Google 路線。';target.classList.add('route-map-error')}
 };
 document.querySelectorAll('.route-overview').forEach((section,index)=>{
   const button=section.querySelector('.route-toggle');const panel=section.querySelector('.route-panel');
@@ -221,15 +226,19 @@ document.querySelectorAll('.route-overview').forEach((section,index)=>{
     if(opening&&!panel.dataset.ready){panel.dataset.ready='true';await initRouteMap(section,index)}
     else if(opening)requestAnimationFrame(()=>section.querySelector('.route-map')._leafletMap?.invalidateSize());
   });
-  section.querySelectorAll('.route-choices select').forEach(select=>select.addEventListener('change',async()=>{
-    const choiceIndex=Number(select.dataset.choiceIndex);const choice=routeMaps[index].choices[choiceIndex];choice.selected=Number(select.value);
+  section.addEventListener('change',async event=>{
+    const select=event.target.closest('.route-choices select');if(!select)return;
+    const choiceIndex=Number(select.dataset.choiceIndex);const choice=routeMaps[index].choices[choiceIndex];if(select.value==='custom')return;
+    clearMealForRouteChoice(index,choice.point);delete choice.customLabel;choice.selected=Number(select.value);
     routeMaps[index].points[choice.point]=choice.options[choice.selected].slice(0,3);
+    select.querySelector('[value=custom]')?.remove();
+    syncMealFromRouteChoice(index,choiceIndex);
     try{localStorage.setItem(choiceKey(index,choiceIndex),String(choice.selected))}catch{}
     const distance=section.querySelector(`[data-choice-distance="${choiceIndex}"]`);if(distance)distance.textContent=distanceLabel(routeMaps[index],choice);
     section.querySelector('.route-google-links').innerHTML=renderGoogleRoutes(routeMaps[index]);
-    const target=section.querySelector('.route-map');target._leafletMap?.remove();target._leafletMap=null;target.classList.remove('route-map-error');target.replaceChildren();
-    if(!panel.hidden)await initRouteMap(section,index);
-  }));
+    const target=section.querySelector('.route-map');target._leafletMap?.remove();target._leafletMap=null;target._mapGeneration=(target._mapGeneration||0)+1;target.classList.remove('route-map-error');target.replaceChildren();
+    if(!panel.hidden)await initRouteMap(section,index);else delete panel.dataset.ready;
+  });
 });
 
 const desktopMotion=window.matchMedia('(min-width: 900px) and (prefers-reduced-motion: no-preference)');
@@ -260,3 +269,169 @@ if(desktopMotion.matches){
     }));
   }).catch(()=>document.documentElement.classList.remove('motion-enabled'));
 }
+
+// Restaurant discovery and saved meal assignments.
+const restaurantForm=document.querySelector('#restaurant-filters');
+const restaurantResults=document.querySelector('#restaurant-results');
+const restaurantCount=document.querySelector('#restaurant-count');
+const shortlistKey='kumamoto-public-restaurant-shortlist-v1';
+let restaurantSaved=new Set();
+try{const saved=JSON.parse(localStorage.getItem(shortlistKey)||'[]');if(Array.isArray(saved))restaurantSaved=new Set(saved.filter(id=>restaurantCandidates.some(r=>r.id===id)))}catch{}
+const escapeRestaurant=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const restaurantMatchesBoth=r=>r.tabelog>=3.5&&Number.isFinite(r.google)&&r.google>=4.5;
+const restaurantMatchesRelaxed=r=>r.tabelog>=3.0&&Number.isFinite(r.google)&&r.google>=4.0;
+const restaurantTiers={
+  both:{label:'最高級別・雙門檻',matches:restaurantMatchesBoth},
+  tabelog:{label:'Tabelog 3.5 以上',matches:r=>r.tabelog>=3.5},
+  relaxed:{label:'放寬選擇',matches:restaurantMatchesRelaxed}
+};
+Object.entries(restaurantTiers).forEach(([key,tier])=>{document.querySelector(`[data-tier-count="${key}"]`).textContent=`${restaurantCandidates.filter(tier.matches).length} 間`});
+document.querySelector('#restaurant-total').textContent=restaurantCandidates.length;
+document.querySelector('#restaurant-verified').textContent=restaurantCandidates.filter(r=>r.googleVerified&&Number.isFinite(r.google)).length;
+const renderRestaurant=r=>{
+  const e=escapeRestaurant;
+  const saved=restaurantSaved.has(r.id);
+  const ratingStatus=restaurantMatchesBoth(r)?'最高級別・符合雙門檻':restaurantMatchesRelaxed(r)?'符合放寬門檻':r.google===null?'Tabelog ≥ 3.5・Google 待確認':'Tabelog ≥ 3.5';
+  const searchQuery=`${r.name} ${r.region==='高千穗'?'高千穂':r.region==='天草'?'天草':'熊本'}`;
+  return `<article class="restaurant-card"><div class="restaurant-card-top"><span>${e(r.region)} · ${e(r.kind)}</span><button type="button" class="restaurant-save" data-save-restaurant="${r.id}" aria-pressed="${saved}" aria-label="${saved?'移出':'加入'}待選：${e(r.name)}">${saved?'已加入待選':'＋ 加入待選'}</button></div><h3>${e(r.name)}</h3><div class="restaurant-scores"><strong>Tabelog ${r.tabelog.toFixed(2)}</strong><span>Google ${r.google===null?'待確認':r.google.toFixed(1)}</span></div><p class="restaurant-rating-status">${ratingStatus}</p><p class="restaurant-budget">${e(r.budget)}／人（來源參考）</p><p class="restaurant-plan">${e(r.note)}</p><div class="links"><a href="${map(searchQuery)}" target="_blank" rel="noreferrer">Google Maps</a><a class="secondary" href="${r.tabelogUrl||ts(searchQuery)}" target="_blank" rel="noreferrer">${r.tabelogUrl?'Tabelog 店家':'Tabelog 店名搜尋'}</a></div>${renderMealApply(r)}<details class="restaurant-sources"><summary>評分來源與日期</summary><p>Tabelog：查閱於 ${r.reviewedAt}，頁面可能為索引快照；<a href="${r.tabelogSource}" target="_blank" rel="noreferrer">${r.tabelogSourceType==='店家頁'?'店家頁':'區域排名'}</a>。</p>${r.googleSource?`<p>Google Maps：${e(r.googleSourceDate)} 直接查閱。<a href="${r.googleSource}" target="_blank" rel="noreferrer">${e(r.googlePlaceName)}</a></p><p>${e(r.googleAddress)}</p>`:'<p>尚無可核對的 Google 分數，不列入雙門檻結果。</p>'}<p>公休為一般規則；祝日、臨時休業及預約狀況請向店家確認。</p></details></article>`;
+};
+const renderRestaurants=()=>{
+  const tier=restaurantTiers[restaurantForm.elements.rating.value]||restaurantTiers.both;
+  const list=restaurantCandidates.filter(tier.matches).sort((a,b)=>b.tabelog-a.tabelog||(b.google??-1)-(a.google??-1)||a.name.localeCompare(b.name,'ja'));
+  restaurantCount.textContent=`${tier.label}：${list.length} 間 · 候選共 ${restaurantCandidates.length} 間 · 已加入待選 ${restaurantSaved.size} 間`;
+  restaurantResults.innerHTML=list.length?list.map(renderRestaurant).join(''):'<div class="restaurant-empty"><h3>此級別暫無已確認的餐廳</h3><p>可切換其他級別。Google 分數未確認的店家不列入雙平台門檻。</p></div>';
+};
+restaurantForm.addEventListener('change',renderRestaurants);
+restaurantForm.addEventListener('submit',event=>event.preventDefault());
+restaurantResults.addEventListener('click',event=>{
+  const button=event.target.closest('[data-save-restaurant]');if(!button)return;
+  const id=button.dataset.saveRestaurant;
+  if(restaurantSaved.has(id))restaurantSaved.delete(id);else restaurantSaved.add(id);
+  try{localStorage.setItem(shortlistKey,JSON.stringify([...restaurantSaved]))}catch{document.querySelector('#restaurant-save-note').textContent='瀏覽器無法儲存；目前待選只保留到這次頁面關閉。'}
+  const focusedIndex=[...restaurantResults.querySelectorAll('[data-save-restaurant]')].indexOf(button);
+  renderRestaurants();
+  const buttons=[...restaurantResults.querySelectorAll('[data-save-restaurant]')];
+  (restaurantResults.querySelector(`[data-save-restaurant="${id}"]`)||buttons[Math.min(focusedIndex,buttons.length-1)]||restaurantForm.querySelector('[name="rating"]:checked')).focus({preventScroll:true});
+});
+// Make the shared comparison list reachable from each day's existing alternatives.
+document.querySelectorAll('.day-card').forEach((card,dayIndex)=>{
+  if(dayIndex===5)return;
+  const panel=card.querySelector('.alternatives:not(.backup-options)')||card.querySelector('.day-body');
+  const link=document.createElement('a');link.href='#restaurants';link.className='restaurant-day-link';link.textContent='比較更多餐廳（依評分級別）';
+  link.addEventListener('click',()=>{restaurantForm.elements.rating.value='both';renderRestaurants()});
+  panel.append(link);
+});
+const restaurantJump=document.createElement('a');restaurantJump.href='#restaurants';restaurantJump.className='day-link';restaurantJump.textContent='餐廳待選';document.querySelector('#day-nav').append(restaurantJump);
+
+
+const mealStorageKey='kumamoto-public-meal-assignments-v1';
+const mealDefinitions=[
+  [0,'dinner','晚餐','市區晚餐首選',5],
+  [1,'lunch','午餐','道の駅 さんぱーる',2],
+  [1,'dinner','晚餐','熊本市區晚餐',7],
+  [2,'lunch','午餐','起司饅頭＋快速午餐',5],
+  [3,'lunch','午餐','高森田楽の里',2],
+  [3,'dinner','晚餐','熊本站晚餐',9],
+  [4,'breakfast','早餐','珈琲回廊',1],
+  [4,'lunch','午餐','花遊懷石午餐',2],
+  [4,'coffee','下午茶','途經 Wednesday 咖啡與甜甜圈',5],
+  [4,'dinner','晚餐','預約型早場晚餐',9]
+];
+const mealSlots=mealDefinitions.map(([day,key,label,title,point])=>{
+  const stop=days[day].stops.findIndex(s=>s[2]===title);
+  return {id:`${day}-${key}`,day,label,stop,point,originalStop:[...(days[day].stops[stop]||[])],originalPoint:[...routeMaps[day].points[point]]};
+}).filter(slot=>slot.stop>=0);
+let mealAssignments={};
+const mealCandidate=id=>{
+  if(typeof id==='string')return restaurantCandidates.find(r=>r.id===id);
+  if(!id||!Number.isInteger(id.day)||!Number.isInteger(id.choice)||!Number.isInteger(id.selected))return;
+  const option=routeMaps[id.day]?.choices?.[id.choice]?.options?.[id.selected];
+  if(!option||option[3])return;
+  return {name:option[0],googlePlaceName:option[0],googleAddress:option[0],budget:'依店家實際菜單',note:'由當日路線餐廳備選選取',tabelogUrl:ts(option[0]),routePoint:option.slice(0,3)};
+};
+const mealSlotLabel=slot=>`${days[slot.day].date} ${slot.label} · ${slot.originalStop[0]}`;
+const renderMealApply=r=>`<div class="restaurant-apply"><label>替換哪一餐<select data-meal-target="${r.id}" aria-label="${escapeRestaurant(r.name)}要替換的餐次"><option value="">選擇日期與餐次</option>${mealSlots.map(slot=>`<option value="${slot.id}">${mealSlotLabel(slot)}${mealAssignments[slot.id]===r.id?' · 已套用':''}</option>`).join('')}</select></label><button type="button" data-apply-meal="${r.id}">套用行程</button></div>`;
+const persistMeals=()=>{
+  try{localStorage.setItem(mealStorageKey,JSON.stringify(mealAssignments));return true}catch{return false}
+};
+const mealPoint=r=>{
+  if(r.routePoint)return [...r.routePoint];
+  const exact=(r.googleSource||'').match(/!3d(-?[\d.]+)!4d(-?[\d.]+)/);
+  if(exact)return [r.name,Number(exact[1]),Number(exact[2])];
+  // Existing map options are already located; match only the full restaurant name.
+  const norm=s=>s.replace(/\s|（[^）]*）|\([^)]*\)/g,'');
+  const known=routeMaps.flatMap(route=>route.choices?.flatMap(c=>c.options)||[]).find(p=>norm(p[0])===norm(r.name)&&hasCoordinates(p));
+  return known?[r.name,known[1],known[2]]:[`${r.googlePlaceName||r.name} ${r.googleAddress||r.region}`,null,null];
+};
+const setMealData=(slot,r)=>{
+  const e=escapeRestaurant;
+  const old=slot.originalStop;
+  days[slot.day].stops[slot.stop]=[old[0],old[1],`${slot.label}｜${e(r.name)}`,e(r.googleAddress||r.region),old[4],e(r.budget),'以店家當日資訊為準',`${e(r.note)}。已替換原餐廳，尚未預約；目前沿用 ${old[0]} 與原停留時間，請核對公休、套餐及前後交通。`,`${r.googlePlaceName||r.name} ${r.googleAddress||r.region||'熊本'}`,r.tabelogUrl||ts(r.name)];
+  routeMaps[slot.day].points[slot.point]=mealPoint(r);
+  const choice=routeMaps[slot.day].choices?.find(c=>c.point===slot.point);
+  if(choice)choice.customLabel=r.name;
+};
+const renderMealDay=day=>{
+  const card=cards[day];
+  card.querySelector('.timeline').innerHTML=days[day].stops.map(renderStop).join('');
+  card.querySelector('.meal-adjustments')?.remove();
+  const active=mealSlots.filter(slot=>slot.day===day&&mealAssignments[slot.id]);
+  const note=card.querySelector('.day-note span');
+  note.textContent=active.length?'本日用餐已依你的選擇調整；請以下方實際餐廳及導航為準。原用餐時段暫留，尚未重新估算交通與預約時間。':days[day].note;
+  if(active.length){
+    const panel=document.createElement('div');panel.className='meal-adjustments';
+    panel.innerHTML=active.map(slot=>`<div><span>${mealSlotLabel(slot)} → ${escapeRestaurant(mealCandidate(mealAssignments[slot.id]).name)}</span><button type="button" class="meal-restore" data-restore-meal="${slot.id}">還原這一餐</button></div>`).join('');
+    card.querySelector('.day-note').after(panel);
+  }
+};
+const refreshMealRoute=day=>{
+  const section=cards[day].querySelector('.route-overview');const route=routeMaps[day];
+  section.querySelector('.route-choices')?.remove();
+  section.querySelector('.route-panel').insertAdjacentHTML('afterbegin',renderChoices(route,day));
+  section.querySelector('.route-google-links').innerHTML=renderGoogleRoutes(route);
+  const target=section.querySelector('.route-map');target._leafletMap?.remove();target._leafletMap=null;target._mapGeneration=(target._mapGeneration||0)+1;target.replaceChildren();target.classList.remove('route-map-error');
+  const panel=section.querySelector('.route-panel');
+  if(!panel.hidden){panel.dataset.ready='true';initRouteMap(section,day)}else delete panel.dataset.ready;
+};
+const restoreMeal=(slot,{refresh=true}={})=>{
+  delete mealAssignments[slot.id];days[slot.day].stops[slot.stop]=[...slot.originalStop];
+  const choice=routeMaps[slot.day].choices?.find(c=>c.point===slot.point);
+  if(choice){delete choice.customLabel;routeMaps[slot.day].points[slot.point]=choice.options[choice.selected].slice(0,3)}
+  else routeMaps[slot.day].points[slot.point]=[...slot.originalPoint];
+  persistMeals();renderMealDay(slot.day);if(refresh)refreshMealRoute(slot.day);
+};
+const clearMealForRouteChoice=(day,point)=>{
+  const slot=mealSlots.find(s=>s.day===day&&s.point===point&&mealAssignments[s.id]);
+  if(slot)restoreMeal(slot,{refresh:false});
+};
+const syncMealFromRouteChoice=(day,choiceIndex)=>{
+  const choice=routeMaps[day].choices[choiceIndex];
+  const slot=mealSlots.find(s=>s.day===day&&s.point===choice.point);if(!slot)return;
+  const name=choice.options[choice.selected][0];
+  const normalize=s=>s.replace(/\s|（[^）]*）|\([^)]*\)/g,'');
+  const candidate=restaurantCandidates.find(r=>normalize(r.name)===normalize(name));
+  mealAssignments[slot.id]=candidate?.id||{day,choice:choiceIndex,selected:choice.selected};
+  setMealData(slot,candidate||mealCandidate(mealAssignments[slot.id]));delete choice.customLabel;
+  persistMeals();renderMealDay(day);
+};
+const initializeMeals=()=>{
+  try{const stored=JSON.parse(localStorage.getItem(mealStorageKey)||'{}');
+    if(stored&&typeof stored==='object'&&!Array.isArray(stored))for(const slot of mealSlots){const r=mealCandidate(stored[slot.id]);if(r){mealAssignments[slot.id]=stored[slot.id];setMealData(slot,r)}}
+  }catch{}
+  for(const day of new Set(mealSlots.map(s=>s.day))){renderMealDay(day);refreshMealRoute(day)}
+};
+restaurantResults.addEventListener('click',event=>{
+  const button=event.target.closest('[data-apply-meal]');if(!button)return;
+  const r=mealCandidate(button.dataset.applyMeal);const select=restaurantResults.querySelector(`[data-meal-target="${r.id}"]`);const slot=mealSlots.find(s=>s.id===select.value);
+  if(!slot){document.querySelector('#meal-status').textContent='請先選擇要替換的日期與餐次。';select.focus();return}
+  mealAssignments[slot.id]=r.id;setMealData(slot,r);const saved=persistMeals();renderMealDay(slot.day);refreshMealRoute(slot.day);
+  document.querySelector('#meal-status').textContent=`已將 ${r.name} 套用至 ${mealSlotLabel(slot)}。${saved?'重新整理後仍會保留。':'瀏覽器無法儲存，關閉後將還原。'}公休與移動時間請再核對。`;
+  cards[slot.day].open=true;cards[slot.day].scrollIntoView({behavior:'smooth',block:'start'});
+});
+document.querySelector('#days').addEventListener('click',event=>{
+  const button=event.target.closest('[data-restore-meal]');if(!button)return;
+  const slot=mealSlots.find(s=>s.id===button.dataset.restoreMeal);if(!slot)return;
+  restoreMeal(slot);document.querySelector('#meal-status').textContent=`已還原 ${mealSlotLabel(slot)}。`;
+});
+initializeMeals();
+renderRestaurants();
