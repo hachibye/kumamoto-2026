@@ -54,7 +54,7 @@ python3 -m http.server 4173 --directory dist
 
 ## 靜態部署參考
 
-這是一個不需要建置流程的靜態網站；實際部署與帳號設定請自行完成。
+前端不需要建置流程；Cloudflare Pages 可同時提供 `functions/api/weather.js` 天氣 API。其他靜態主機會直接使用瀏覽器端天氣備援；實際部署與帳號設定請自行完成。
 
 ### Cloudflare Pages
 
@@ -81,3 +81,28 @@ GitHub 圖示來自 [Simple Icons](https://simpleicons.org/)（CC0）。
 加入待選後，可選擇公開範例中的 10 個餐次並「套用行程」，更新餐廳與導航，也可逐餐還原。選擇只保存在目前瀏覽器。旅館含餐不提供替換；套用後沿用原時段，營業、預約與移動時間仍須自行確認。
 
 餐廳公開資訊位於 `dist/restaurants.js`，缺少 Google 分數時填 `null`，新增店家請保留穩定的 `id`。更換行程時，同步調整 `dist/app.js` 的 `mealDefinitions` 餐次名稱與地圖索引。根目錄與 `dist/index.html` 必須保持同步，並保留 `_redirects` 的 `/restaurants.js` 規則。
+
+
+## 公開範例天氣（2026/11/18）
+
+首頁新增六張天氣卡，僅使用本公開範例的 **2026/11/15–11/20**，依熊本市、天草、高千穗、黑川溫泉、阿蘇草千里與熊本機場對應每天目的地。日期已去識別化，並非有效訂單或實際出發日期；更換範例時請同步修改 `dist/weather.js` 的 `days`、行程資料與兩份首頁。地點只使用公開景點座標，不要求瀏覽器定位。
+
+- 優先讀取同站 `/api/weather`，以 Open-Meteo 為主要來源，GFS 集合趨勢及 MET Norway 為備援；API 只查固定目的地，不接受任意上游網址或座標，不需金鑰、資料庫或管理密碼。伺服器識別資訊僅連結本公開 repository。
+- 以日本時區判斷日期；超過七天標示趨勢，最遠十六天。過期日期顯示「已過預報日期」，超出範圍或無資料時不填造溫度，提供氣象廳預報連結。預報不是歷史天氣回顧；今日若已超過範例日期，過期卡片屬預期行為。
+- MET Norway 顯示時段樣本溫度範圍，GFS 顯示集合成員平均；兩者缺少降雨機率時不顯示成零。各來源依頁面註明 [Open-Meteo](https://open-meteo.com/en/docs)、[MET Norway](https://api.met.no/doc/TermsOfService) 與 CC BY 4.0。
+- 瀏覽器以 `kumamoto-public-weather-v1` 保存預報，三十分鐘內使用快取；更新失敗可沿用四十八小時內的資料，保留來源及取得時間。私人行程、餐廳預約、共同清單、D1 綁定及密碼均未包含於此功能。
+- 桌機六卡並列；手機可滑動、按鈕或方向鍵瀏覽，支援暫停輪播及減少動態效果。
+
+Cloudflare Pages 請以 repository root 為專案根目錄、`dist` 為輸出目錄，使根目錄 `functions/` 可被部署；`dist/_routes.json` 僅讓 `/api/weather` 呼叫 Function。無 Functions 的本機靜態預覽仍可透過瀏覽器直接讀取公開氣象 API；CSP 已列出三個來源。
+
+驗證指令：
+
+```bash
+node --test tests/weather-api.test.cjs
+python3 -m http.server 4174 --directory dist
+# 另一個終端；若 Playwright 未安裝於目前目錄，傳入其模組路徑
+node tests/weather-browser.cjs /path/to/playwright http://localhost:4174
+# 可加第四個參數指定 Chromium／Chrome 執行檔
+```
+
+API 測試包含快取、主要來源失敗、GFS／MET 備援、單一地點失敗與全部失敗；瀏覽器測試包含公開日期、桌機／手機明暗、鍵盤、快取、更新失敗、各來源備援及過期／範圍外日期。
